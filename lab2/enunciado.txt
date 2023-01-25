@@ -1,0 +1,126 @@
+PThreads (Posix Threads) & OpenMP
+
+O arquivo 'medir-tempo.c' mostra como medir tempo com gettimeofday(), em C.
+Poderá ser útil.
+Para compilar e executar:
+gcc -o medir-tempo medir-tempo.c
+./medir-tempo
+
+I. PThreads
+
+Para compilar um programa com Threads posix, o comando genérico é
+gcc -o dining-philo dining-philo.c -lpthread
+
+(Existem variações possíveis, por exemplo na ordem dos argumentos passados a gcc.)
+
+1- Produtor Consumidor
+Considerar o programa 'prod-cons-com-mutex.c'. Ele funciona e é correto.
+Neste programa, uma thread 'produtora' inicializa de uma vez todo um buffer
+(vetor) de N entradas. Depois, N threads consumidoras leem estas N entradas. O
+buffer tem a mesma capacidade N como têm dados "produzidos" pela produtora.
+
+Alterar este programa para fazer duas coisas:
+  - Depois que uma thread consumidora lê uma entrada i do buffer, ela dá o
+    valor -1 a esta entrada. Desta forma, ela "consume" e destroi o que leu do
+buffer, e sinaliza à produtora que pode escrever outra coisa naquele lugar no
+buffer.
+  - A thread produtora passa a querer produzir mais dados que o tamanho N do
+buffer. Vamos supor que produza 2*N dados. Inicialmente, a thread pode
+rodar um primeiro laço de N iterações para encher o buffer. Depois disso, a
+thread produtora precisará aguardar N vezes que uma thread consumidora leia uma
+entrada (qualquer) do buffer, tenha a setado a -1, para poder escrever nesta
+mesma entrada um novo dado produzido.
+Uma vez que todas as threads usam o mesmo mutex ('lock') para acessar um valor de i em exclusão mútua, 
+e consumir buffer[i], uma forma simples de programar o ajuste no produtor é usar este mesmo 'lock':
+     pega_lock( i ) 
+     // Agora nenhuma outra thread está mexendo com o buffer
+     Verifica se uma entrada do buffer vale -1
+     Se a entrada j vale -1, produz um novo dado e o armazena em buffer[j]
+     Se não existe entrada valendo -1, é que nenhuma thread ainda consumiu algo.
+     libera_lock(i)
+  - Atentar que, agora, precisa de mais consumidoras para consumir as 2*N
+    produções. Uma solução é disparar 2*N threads consumidoras. Outra solução é
+que que cada thread consumidora consuma duas entradas do buffer. Outra solução
+ainda é manter N threads consumidoras, mas fazer elas executar um laço infinito
+de leituras no buffer, até este só conter entradas valendo -1.
+
+(Obs.: este exercício não é difícil e não pede muita programação além do que já está no código fornecido. Mas ele
+pode tomar tempo, devido às variações possíveis.)
+
+2- Jantar dos filósofos
+ 
+     A implementação fornecida, com mutexes para proteger os palitos, leva a
+     deadlock potencial. De fato, o filósofo i tenta pegar o lock do palito[i] e de
+     palito[i+1 % NB_FILOSOFOS].
+     Uma solução simples para evitar o deadlock é forçar um dos filósofos - por exemplo, o último, ou 
+     seja ou que tem por id i == NB_FILOSOFOS-1 - a tentar pegar os palitos na ordem oposta dos demais: 
+     primeiro o palito[i+1 % NB_FILOSOFOS], e depois palito[i]. O algoritmo em pseudo código seria:
+
+     Compara i e i+1 % NB_FILOSOFOS.
+     Sempre tenta pegar primeiro o menor dos dois, e depois o maior.
+     Desta forma, impoe-se uma ordem global de prioridade entre os palitos.
+     Exemplo:
+      P0  F0  P1  F1  P2  F2  P3  F3  P4  F4  P5  F5 ---
+       ^                                               |
+       |_______________________________________________+
+     F0 tenta pegar 1o P0, e depois P1. F3 tenta pegar primeiro P3 e depois P4...
+     F5 tenta pegar 1o P0, e depois P5. Ele é o único a usar esta ordem invertida.
+
+     O exercício consiste em implementar esta mudança.
+
+     Antes ou depois disso, pode-se também alterar o código fornecido para que cada filósofo alterne mais fases de reflexão
+     e de comida. Ao aumentar o número de ciclos "pega o palito - libera o palito", vai aumentar a probabilidade de se chegar a
+     um deadlock. Basta inserir um laço no código de 'atividade_filo'.
+
+3- Paralismo de laços com P-Threads
+
+Este exercício consiste em tentar programar com Threads Posix alguma coisa parecida a um laço
+paralelizado com OpenMP. O programa 'lacos.c' fornece uma implementação básica que distribui 50 
+iterações de um laço entre 5 threads.
+
+a) Alterar a função 'um_resultado' para que ela leve bem mais tempo e executar (por exemplo: alguns milisegundos). Você pode
+usar 'sleep', ou prever um cálculo mais complicado a ser efetuado. Pode-se também aumentar o número N de iterações, por exemplo para
+passar de 50 a 50.000. 
+Medir o tempo de execução do programa, quando rodado com 1, 2, 3, 4... threads. 
+Eliminar as chamadas PThread para ter um código puramente sequencial. Medir seu tempo de execução.
+Conclusões?
+
+b) Alterar os cálculos que definem o intervalo de iterações de uma dada thread. Por exemplo, prever o caso em que o número 
+de threads não divide exatamente o número de iterações.
+
+
+II. OPEN-MP
+
+0- Uso do OpenMP com o gcc.
+O compilador gcc é apto a compilar programas OpenMP, quando usado com o flag "-fopenmp".
+Para definir o número de threads a executar, na linha de comando, usar:
+export OMP_NUM_THREADS=4
+(para usar 4 threads.)
+
+1- Baixar os exemplos de programa encontrados no Moodle.
+Compilar e executar o "hello-world" com várias threads.
+Consultar as informações em /proc/cpuinfo para verificar quantos cores seu PC possui.
+
+2- Paralelismo de laços triviais
+Considerar o programa omp-laco1.c. Usar a cláusula schedule(static) ou
+schedule(dynamic) para observar a distribuição das iterações entre as threads.
+Usando-se o comando 'top', verificar a carga dos cores.
+
+3- Uso de Reduce
+Considerar o programa omp-pi.c. 
+Observar o uso de "reduce", associado a pi.  Usar a função de C gettimeofday
+('man gettimeofday') para medir o tempo de execução do programa em função do
+número de threads usadas. Ganha-se tempo? Idealmente, o tempo de execução paralelo com p threads (p<= numero de cores) é
+igual ao tempo de execução sequencial dividido por p. O quanto o desempenho paralelo se aproxima deste ideal?
+
+4- Produto matricial
+Considerar o programa que efetua o produto matricial em exo-matriz.c, e 
+compilá-lo em C. 
+Paralelizar este programa com OpenMP.
+Dica: usar a diretiva 
+#pragma omp parallel for
+para distribuir as iterações de um laço. Cuidado com o uso de private/shared.
+Existem muitas variações possíveis em função do(s) laço(s) paralelizado(s), e do uso de schedule() para
+distribuir as iterações entre as threads. Optar por uma ou duas, e medir o desempenho.
+
+
